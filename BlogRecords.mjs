@@ -1,4 +1,3 @@
-
 /*
   @license The MIT License (MIT)             - [https://github.com/subversivo58/blog-records/blob/main/LICENSE]
   @copyright Copyright (c) 2010-2026 Lauro Moraes - [https://github.com/subversivo58]
@@ -158,7 +157,7 @@ async function authenticateAdmin(request, env) {
         return unauthorized("Invalid key identifier");
     }
 
-    const storedPublicKey = env[kid];
+    const storedPublicKey = env[`K_${kid}`];
 
     if (typeof storedPublicKey !== "string") {
         return unauthorized("Public key not found");
