@@ -1,13 +1,9 @@
-
 /*
   @license The MIT License (MIT)             - [https://github.com/subversivo58/blog-records/blob/main/LICENSE]
   @copyright Copyright (c) 2010-2026 Lauro Moraes - [https://github.com/subversivo58]
 */
 
 import { JWToken } from "../utils/JWToken.mjs";
-
-
-const JWT_AUDIENCE = "blog-records";
 
 
 function unauthorized(message = "Unauthorized") {
@@ -21,10 +17,6 @@ function unauthorized(message = "Unauthorized") {
 
 
 function normalizePublicKey(value) {
-    if (typeof value !== "string" || !value.trim()) {
-        throw new Error("Public key not found.");
-    }
-
     return value
         .replace(/-----BEGIN PUBLIC KEY-----/g, "")
         .replace(/-----END PUBLIC KEY-----/g, "")
@@ -37,12 +29,7 @@ function normalizePublicKey(value) {
 
 export async function authenticateAdmin(request, env) {
     const authorization = request.headers.get("Authorization");
-
-    if (!authorization) {
-        return unauthorized();
-    }
-
-    const match = authorization.match(/^Bearer\s+(\S+)$/i);
+    const match = authorization?.match(/^Bearer\s+(\S+)$/i);
 
     if (!match) {
         return unauthorized("Invalid authorization header");
@@ -50,26 +37,21 @@ export async function authenticateAdmin(request, env) {
 
     const token = match[1];
 
-    let jwt;
+    const jwt = new JWToken({
+        audience: "blog-records"
+    });
+
     let decoded;
 
     try {
-        jwt = new JWToken({
-            audience: JWT_AUDIENCE
-        });
-
         decoded = jwt.decode(token);
-
     } catch {
         return unauthorized("Invalid token");
     }
 
     const kid = decoded.header?.kid;
 
-    if (
-        typeof kid !== "string" ||
-        !/^K_[a-f0-9]{32}$/i.test(kid)
-    ) {
+    if (typeof kid !== "string") {
         return unauthorized("Invalid key identifier");
     }
 
