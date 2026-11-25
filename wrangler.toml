@@ -1,3 +1,4 @@
+
 name = "blog-records"
 main = "BlogRecords.mjs"
 compatibility_date = "2026-11-25"
@@ -8,4 +9,4 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "blog-records"
-database_id = "PREENCHER_DEPOIS"
+database_id = "3c86eb76-1a24-44b4-926b-b1b7ced378dc"
