@@ -1,4 +1,3 @@
-
 /*
   @license The MIT License (MIT)             - [https://github.com/subversivo58/blog-records/blob/main/LICENSE]
   @copyright Copyright (c) 2010-2026 Lauro Moraes - [https://github.com/subversivo58]
@@ -21,6 +20,7 @@ export async function handleErrors(request, env) {
         data = await request.json();
     } catch {
         return Response.json({
+            success: false,
             error: "Invalid JSON"
         }, {
             status: 400
@@ -32,6 +32,7 @@ export async function handleErrors(request, env) {
 
     if (!ERROR_TYPES.includes(type)) {
         return Response.json({
+            success: false,
             error: "Invalid error type"
         }, {
             status: 400
@@ -44,6 +45,7 @@ export async function handleErrors(request, env) {
         message.trim().length > 280
     ) {
         return Response.json({
+            success: false,
             error: "Message must contain between 1 and 280 characters"
         }, {
             status: 400
@@ -67,6 +69,7 @@ export async function handleErrors(request, env) {
 
     } catch {
         return Response.json({
+            success: false,
             error: "Failed to save error report"
         }, {
             status: 500

@@ -1,4 +1,3 @@
-
 /*
   @license The MIT License (MIT)             - [https://github.com/subversivo58/blog-records/blob/main/LICENSE]
   @copyright Copyright (c) 2010-2026 Lauro Moraes - [https://github.com/subversivo58]
@@ -11,6 +10,7 @@ export async function handleFeedback(request, env) {
         data = await request.json();
     } catch {
         return Response.json({
+            success: false,
             error: "Invalid JSON"
         }, {
             status: 400
@@ -26,6 +26,7 @@ export async function handleFeedback(request, env) {
         rating > 5
     ) {
         return Response.json({
+            success: false,
             error: "Rating must be an integer between 1 and 5"
         }, {
             status: 400
@@ -38,6 +39,7 @@ export async function handleFeedback(request, env) {
         message.trim().length > 500
     ) {
         return Response.json({
+            success: false,
             error: "Message must contain between 1 and 500 characters"
         }, {
             status: 400
@@ -61,6 +63,7 @@ export async function handleFeedback(request, env) {
 
     } catch {
         return Response.json({
+            success: false,
             error: "Failed to save feedback"
         }, {
             status: 500
