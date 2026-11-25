@@ -1,3 +1,4 @@
+
 /*
   @license The MIT License (MIT)             - [https://github.com/subversivo58/blog-records/blob/main/LICENSE]
   @copyright Copyright (c) 2010-2026 Lauro Moraes - [https://github.com/subversivo58]
@@ -6,7 +7,11 @@
 import { JWToken } from "./JWToken.mjs";
 
 
+const ALLOWED_ORIGIN = "https://subversivo58.github.io";
+
 const JWT_AUDIENCE = "blog-records";
+
+const PAGE_SIZE = 25;
 
 const ERROR_TYPES = [
     "custom",
@@ -40,6 +45,68 @@ function errorResponse(error, status) {
         success: false,
         error
     }, status);
+}
+
+
+function corsResponse(response) {
+    const headers = new Headers(response.headers);
+
+    headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+    headers.set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+    headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    headers.set("Access-Control-Max-Age", "86400");
+    headers.set("Vary", "Origin");
+
+    return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers
+    });
+}
+
+
+function handlePreflight(request) {
+    const requestedMethod = request.headers.get(
+        "Access-Control-Request-Method"
+    );
+
+    const requestedHeaders = request.headers.get(
+        "Access-Control-Request-Headers"
+    );
+
+    const allowedMethods = [
+        "GET",
+        "POST",
+        "DELETE"
+    ];
+
+    const allowedHeaders = [
+        "authorization",
+        "content-type"
+    ];
+
+    if (
+        !requestedMethod ||
+        !allowedMethods.includes(requestedMethod.toUpperCase())
+    ) {
+        return errorResponse("Method Not Allowed", 405);
+    }
+
+    if (requestedHeaders) {
+        const headers = requestedHeaders
+            .split(",")
+            .map(header => header.trim().toLowerCase());
+
+        if (
+            headers.some(header => !allowedHeaders.includes(header))
+        ) {
+            return errorResponse("Headers Not Allowed", 403);
+        }
+    }
+
+    return new Response(null, {
+        status: 204
+    });
 }
 
 
@@ -93,7 +160,7 @@ async function authenticateAdmin(request, env) {
 
     const storedPublicKey = env[kid];
 
-    if (!storedPublicKey) {
+    if (typeof storedPublicKey !== "string") {
         return unauthorized("Public key not found");
     }
 
@@ -274,17 +341,35 @@ async function handleAnalytics(request, env) {
 // ADMIN HANDLERS
 // ============================================================
 
-async function listRecords(env, table) {
+async function listRecords(env, table, page) {
+    const offset = (page - 1) * PAGE_SIZE;
+
     try {
+        const count = await env.DB.prepare(`
+            SELECT COUNT(*) AS total
+            FROM ${table}
+        `).first();
+
         const result = await env.DB.prepare(`
             SELECT *
             FROM ${table}
             ORDER BY created_at DESC, id DESC
-        `).all();
+            LIMIT ? OFFSET ?
+        `)
+        .bind(PAGE_SIZE, offset)
+        .all();
+
+        const total = count.total;
 
         return jsonResponse({
             success: true,
-            results: result.results
+            results: result.results,
+            pagination: {
+                page,
+                limit: PAGE_SIZE,
+                total,
+                totalPages: Math.ceil(total / PAGE_SIZE)
+            }
         });
 
     } catch {
@@ -372,26 +457,21 @@ async function handleAdminRequest(
     request,
     env,
     resource,
-    id
+    id,
+    url
 ) {
     if (!ADMIN_TABLES.includes(resource)) {
-        return new Response("Not Found", {
-            status: 404
-        });
+        return errorResponse("Not Found", 404);
     }
 
     const method = request.method.toUpperCase();
 
     if (method !== "GET" && method !== "DELETE") {
-        return new Response("Method Not Allowed", {
-            status: 405
-        });
+        return errorResponse("Method Not Allowed", 405);
     }
 
     if (method === "DELETE" && !id) {
-        return new Response("Method Not Allowed", {
-            status: 405
-        });
+        return errorResponse("Method Not Allowed", 405);
     }
 
     const authResponse = await authenticateAdmin(
@@ -404,7 +484,17 @@ async function handleAdminRequest(
     }
 
     if (method === "GET" && !id) {
-        return listRecords(env, resource);
+        const pageParam = url.searchParams.get("page") ?? "1";
+        const page = Number(pageParam);
+
+        if (
+            !/^[1-9]\d*$/.test(pageParam) ||
+            !Number.isSafeInteger(page)
+        ) {
+            return errorResponse("Invalid page number", 400);
+        }
+
+        return listRecords(env, resource, page);
     }
 
     if (method === "GET" && id) {
@@ -415,13 +505,21 @@ async function handleAdminRequest(
         return deleteRecord(env, resource, id);
     }
 
-    return new Response("Method Not Allowed", {
-        status: 405
-    });
+    return errorResponse("Method Not Allowed", 405);
 }
 
 
 async function handleRequest(request, env) {
+    const origin = request.headers.get("Origin");
+
+    if (origin !== ALLOWED_ORIGIN) {
+        return errorResponse("Origin Not Allowed", 403);
+    }
+
+    if (request.method.toUpperCase() === "OPTIONS") {
+        return corsResponse(handlePreflight(request));
+    }
+
     const url = new URL(request.url);
 
     const method = request.method.toUpperCase();
@@ -433,7 +531,9 @@ async function handleRequest(request, env) {
     ];
 
     if (publicHandler) {
-        return publicHandler(request, env);
+        return corsResponse(
+            await publicHandler(request, env)
+        );
     }
 
     const adminMatch = pathname.match(
@@ -441,19 +541,22 @@ async function handleRequest(request, env) {
     );
 
     if (!adminMatch) {
-        return new Response("Not Found", {
-            status: 404
-        });
+        return corsResponse(
+            errorResponse("Not Found", 404)
+        );
     }
 
     const [, resource, id] = adminMatch;
 
-    return handleAdminRequest(
+    const response = await handleAdminRequest(
         request,
         env,
         resource,
-        id
+        id,
+        url
     );
+
+    return corsResponse(response);
 }
 
 
@@ -463,6 +566,6 @@ async function handleRequest(request, env) {
 
 export default {
     async fetch(request, env, ctx) {
-        return handleRequest(request, env, ctx);
+        return handleRequest(request, env);
     }
 };
