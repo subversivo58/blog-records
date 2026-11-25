@@ -11,19 +11,8 @@ export async function handleAnalytics(request, env) {
         data = await request.json();
     } catch {
         return Response.json({
+            success: false,
             error: "Invalid JSON"
-        }, {
-            status: 400
-        });
-    }
-
-    if (
-        data === null ||
-        typeof data !== "object" ||
-        Array.isArray(data)
-    ) {
-        return Response.json({
-            error: "Analytics content must be a JSON object"
         }, {
             status: 400
         });
@@ -46,6 +35,7 @@ export async function handleAnalytics(request, env) {
 
     } catch {
         return Response.json({
+            success: false,
             error: "Failed to save analytics"
         }, {
             status: 500

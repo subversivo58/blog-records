@@ -4,19 +4,34 @@
   @copyright Copyright (c) 2010-2026 Lauro Moraes - [https://github.com/subversivo58]
 */
 
-import * as JWToken from "../utils/JWToken.mjs";
+import { JWToken } from "../utils/JWToken.mjs";
 
 
 const JWT_AUDIENCE = "blog-records";
 
 
 function unauthorized(message = "Unauthorized") {
-    return new Response(message, {
-        status: 401,
-        headers: {
-            "Content-Type": "text/plain; charset=utf-8"
-        }
+    return Response.json({
+        success: false,
+        error: message
+    }, {
+        status: 401
     });
+}
+
+
+function normalizePublicKey(value) {
+    if (typeof value !== "string" || !value.trim()) {
+        throw new Error("Public key not found.");
+    }
+
+    return value
+        .replace(/-----BEGIN PUBLIC KEY-----/g, "")
+        .replace(/-----END PUBLIC KEY-----/g, "")
+        .replace(/\s/g, "")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/g, "");
 }
 
 
@@ -30,56 +45,55 @@ export async function authenticateAdmin(request, env) {
     const match = authorization.match(/^Bearer\s+(\S+)$/i);
 
     if (!match) {
-        return unauthorized();
+        return unauthorized("Invalid authorization header");
     }
 
     const token = match[1];
 
+    let jwt;
     let decoded;
 
     try {
-        decoded = JWToken.decode(token);
+        jwt = new JWToken({
+            audience: JWT_AUDIENCE
+        });
+
+        decoded = jwt.decode(token);
+
     } catch {
         return unauthorized("Invalid token");
     }
 
-    if (!decoded?.header?.kid) {
-        return unauthorized("Missing key identifier");
-    }
+    const kid = decoded.header?.kid;
 
-    const kid = decoded.header.kid;
-
-    if (!/^K_[A-Za-z0-9]+$/.test(kid)) {
+    if (
+        typeof kid !== "string" ||
+        !/^K_[a-f0-9]{32}$/i.test(kid)
+    ) {
         return unauthorized("Invalid key identifier");
     }
 
-    const publicKey = env[kid];
+    const storedPublicKey = env[kid];
 
-    if (!publicKey) {
+    if (!storedPublicKey) {
         return unauthorized("Public key not found");
     }
 
-    let valid;
-
     try {
-        valid = await JWToken.verify({
+        const publicKey = await jwt.importKey({
+            keyId: kid,
+            type: "public",
+            keyData: normalizePublicKey(storedPublicKey),
+            format: "spki"
+        });
+
+        await jwt.verify({
             token,
             publicKey
         });
+
     } catch {
-        return unauthorized("Invalid token");
-    }
-
-    if (!valid) {
-        return unauthorized("Invalid token");
-    }
-
-    if (JWToken.isExpired(token)) {
-        return unauthorized("Expired token");
-    }
-
-    if (decoded.payload?.aud !== JWT_AUDIENCE) {
-        return unauthorized("Invalid audience");
+        return unauthorized("Token verification failed");
     }
 
     return null;
