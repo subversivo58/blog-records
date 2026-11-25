@@ -1,4 +1,3 @@
-
 /*
   @license The MIT License (MIT)             - [https://github.com/subversivo58/blog-records/blob/main/LICENSE]
   @copyright Copyright (c) 2010-2026 Lauro Moraes - [https://github.com/subversivo58]
@@ -20,6 +19,7 @@ async function listRecords(env, table) {
 
     } catch {
         return Response.json({
+            success: false,
             error: "Failed to retrieve records"
         }, {
             status: 500
@@ -40,6 +40,7 @@ async function getRecord(env, table, id) {
 
         if (!result) {
             return Response.json({
+                success: false,
                 error: "Record not found"
             }, {
                 status: 404
@@ -53,6 +54,7 @@ async function getRecord(env, table, id) {
 
     } catch {
         return Response.json({
+            success: false,
             error: "Failed to retrieve record"
         }, {
             status: 500
@@ -72,6 +74,7 @@ async function deleteRecord(env, table, id) {
 
         if (result.meta.changes === 0) {
             return Response.json({
+                success: false,
                 error: "Record not found"
             }, {
                 status: 404
@@ -85,6 +88,7 @@ async function deleteRecord(env, table, id) {
 
     } catch {
         return Response.json({
+            success: false,
             error: "Failed to delete record"
         }, {
             status: 500
