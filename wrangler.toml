@@ -1,6 +1,5 @@
-
 name = "blog-records"
-main = "src/index.mjs"
+main = "BlogRecords.mjs"
 compatibility_date = "2026-11-25"
 
 [observability]
@@ -10,4 +9,3 @@ enabled = true
 binding = "DB"
 database_name = "blog-records"
 database_id = "PREENCHER_DEPOIS"
-migrations_dir = "migrations"
