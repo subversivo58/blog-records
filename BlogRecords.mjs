@@ -153,7 +153,10 @@ async function authenticateAdmin(request, env) {
 
     const kid = decoded.header?.kid;
 
-    if (typeof kid !== "string") {
+    if (
+        typeof kid !== "string" ||
+        !/^[a-f0-9]{32}$/i.test(kid)
+    ) {
         return unauthorized("Invalid key identifier");
     }
 
