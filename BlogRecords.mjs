@@ -1,3 +1,4 @@
+
 /*
   @license The MIT License (MIT)             - [https://github.com/subversivo58/blog-records/blob/main/LICENSE]
   @copyright Copyright (c) 2010-2026 Lauro Moraes - [https://github.com/subversivo58]
@@ -188,6 +189,27 @@ async function authenticateAdmin(request, env) {
 
 
 // ============================================================
+// DATE VALIDATION
+// ============================================================
+
+function isValidDate(value) {
+    if (
+        typeof value !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(value)
+    ) {
+        return false;
+    }
+
+    const date = new Date(`${value}T00:00:00.000Z`);
+
+    return (
+        !Number.isNaN(date.getTime()) &&
+        date.toISOString().slice(0, 10) === value
+    );
+}
+
+
+// ============================================================
 // PUBLIC HANDLERS
 // ============================================================
 
@@ -343,6 +365,10 @@ async function handleAnalytics(request, env) {
 // ADMIN HANDLERS
 // ============================================================
 
+// ------------------------------------------------------------
+// LIST RECORDS
+// ------------------------------------------------------------
+
 async function listRecords(env, table, page) {
     const offset = (page - 1) * PAGE_SIZE;
 
@@ -383,6 +409,10 @@ async function listRecords(env, table, page) {
 }
 
 
+// ------------------------------------------------------------
+// GET RECORD
+// ------------------------------------------------------------
+
 async function getRecord(env, table, id) {
     try {
         const result = await env.DB.prepare(`
@@ -414,6 +444,10 @@ async function getRecord(env, table, id) {
 }
 
 
+// ------------------------------------------------------------
+// DELETE SINGLE RECORD
+// ------------------------------------------------------------
+
 async function deleteRecord(env, table, id) {
     try {
         const result = await env.DB.prepare(`
@@ -438,6 +472,84 @@ async function deleteRecord(env, table, id) {
     } catch {
         return errorResponse(
             "Failed to delete record",
+            500
+        );
+    }
+}
+
+
+// ------------------------------------------------------------
+// DELETE RECORDS BY PERIOD
+// ------------------------------------------------------------
+
+async function deleteRecordsByPeriod(
+    env,
+    table,
+    from,
+    to
+) {
+    if (
+        !isValidDate(from) ||
+        !isValidDate(to)
+    ) {
+        return errorResponse(
+            "Invalid date range",
+            400
+        );
+    }
+
+    if (from > to) {
+        return errorResponse(
+            "The start date cannot be later than the end date",
+            400
+        );
+    }
+
+    try {
+        const result = await env.DB.prepare(`
+            DELETE FROM ${table}
+            WHERE date(created_at) >= date(?)
+            AND date(created_at) <= date(?)
+        `)
+        .bind(from, to)
+        .run();
+
+        return jsonResponse({
+            success: true,
+            deleted: result.meta.changes,
+            period: {
+                from,
+                to
+            }
+        });
+
+    } catch {
+        return errorResponse(
+            "Failed to delete records by period",
+            500
+        );
+    }
+}
+
+
+// ------------------------------------------------------------
+// DELETE ALL RECORDS
+// ------------------------------------------------------------
+
+async function deleteAllRecords(env, table) {
+    try {
+        const result = await env.DB.prepare(`
+            DELETE FROM ${table}
+        `).run();
+
+        return jsonResponse({
+            success: true,
+            deleted: result.meta.changes
+        });
+
+    } catch {
+        return errorResponse(
+            "Failed to delete all records",
             500
         );
     }
@@ -472,10 +584,6 @@ async function handleAdminRequest(
         return errorResponse("Method Not Allowed", 405);
     }
 
-    if (method === "DELETE" && !id) {
-        return errorResponse("Method Not Allowed", 405);
-    }
-
     const authResponse = await authenticateAdmin(
         request,
         env
@@ -500,11 +608,52 @@ async function handleAdminRequest(
     }
 
     if (method === "GET" && id) {
-        return getRecord(env, resource, id);
+        const recordId = Number(id);
+
+        if (
+            !Number.isSafeInteger(recordId) ||
+            recordId < 1
+        ) {
+            return errorResponse("Invalid record ID", 400);
+        }
+
+        return getRecord(env, resource, recordId);
     }
 
     if (method === "DELETE" && id) {
-        return deleteRecord(env, resource, id);
+        const recordId = Number(id);
+
+        if (
+            !Number.isSafeInteger(recordId) ||
+            recordId < 1
+        ) {
+            return errorResponse("Invalid record ID", 400);
+        }
+
+        return deleteRecord(env, resource, recordId);
+    }
+
+    if (method === "DELETE" && !id) {
+        const from = url.searchParams.get("from");
+        const to = url.searchParams.get("to");
+
+        if (from !== null || to !== null) {
+            if (from === null || to === null) {
+                return errorResponse(
+                    "Both from and to dates are required",
+                    400
+                );
+            }
+
+            return deleteRecordsByPeriod(
+                env,
+                resource,
+                from,
+                to
+            );
+        }
+
+        return deleteAllRecords(env, resource);
     }
 
     return errorResponse("Method Not Allowed", 405);
